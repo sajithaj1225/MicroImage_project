@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Microscope Image Processing</title>
+    <style>
+        /* General Styles */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e2f;
+            color: #ffffff;
+            margin: 0;
+            padding: 0;
+        }
+
+        h1, h2 {
+            color: #ffffff;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .card {
+            background-color: #2a2a40;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s ease;
+        }
+
+        .btn:hover {
+            background-color: #45a049;
+        }
+
+        .btn:disabled {
+            background-color: #666666;
+            cursor: not-allowed;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #444;
+            background-color: #333;
+            color: #ffffff;
+        }
+
+        .image-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .image-item {
+            border: 1px solid #444;
+            border-radius: 5px;
+            padding: 10px;
+            text-align: center;
+            background-color: #333;
+        }
+
+        .image-item img {
+            max-width: 150px;
+            max-height: 150px;
+            border-radius: 5px;
+        }
+
+        .result-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .result-image {
+            max-width: 100%;
+            border-radius: 5px;
+            border: 1px solid #444;
+        }
+
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .status.success {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .status.error {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .canvas-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        #imageCanvas {
+            border: 1px solid #444;
+            border-radius: 5px;
+            background-color: #333;
+            cursor: crosshair;
+        }
+
+        .roi-selection {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .roi-selection p {
+            margin: 10px 0;
+        }
+
+        .hidden {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Microscope Image Processing</h1>
+
+        <!-- Upload Images Section -->
+        <div class="card">
+            <h2>1. Upload Images</h2>
+            <div class="form-group">
+                <input type="file" id="imageUpload" multiple accept=".jpg,.jpeg,.png,.tif,.tiff">
+                <button class="btn" id="uploadBtn">Upload Images</button>
+            </div>
+            <div id="uploadStatus" class="status"></div>
+            <div class="image-preview" id="uploadedImages"></div>
+        </div>
+
+        <!-- Image Stitching Section -->
+        <div class="card">
+            <h2>2. Image Stitching</h2>
+            <p>Stitch multiple overlapping images into a single high-resolution image.</p>
+            <button class="btn" id="stitchBtn" disabled>Stitch Selected Images</button>
+            <div id="stitchStatus" class="status"></div>
+            <div class="result-container hidden" id="stitchResult">
+                <h3>Stitched Result:</h3>
+                <img id="stitchedImage" class="result-image">
+            </div>
+        </div>
+
+        <!-- ROI Selection Section -->
+        <div class="card">
+            <h2>3. ROI Selection</h2>
+            <p>Extract a Region of Interest (ROI) from an image.</p>
+            <div class="form-group">
+                <label for="roiImageSelect">Select an image:</label>
+                <select id="roiImageSelect">
+                    <option value="">-- Select an image --</option>
+                </select>
+            </div>
+            <div class="canvas-container hidden" id="canvasContainer">
+                <canvas id="imageCanvas"></canvas>
+                <div class="roi-selection">
+                    <p>ROI Coordinates:</p>
+                    <div>X: <span id="roiX">0</span>, Y: <span id="roiY">0</span>, Width: <span id="roiWidth">0</span>, Height: <span id="roiHeight">0</span></div>
+                    <button class="btn" id="extractRoiBtn">Extract ROI</button>
+                </div>
+            </div>
+            <div id="roiStatus" class="status"></div>
+            <div class="result-container hidden" id="roiResult">
+                <h3>Extracted ROI:</h3>
+                <img id="roiImage" class="result-image">
+            </div>
+        </div>
+
+        <!-- Zoom Section -->
+        <div class="card">
+            <h2>4. Digital Zoom</h2>
+            <p>Apply digital zoom to a microscope image (10x or 20x).</p>
+            <div class="form-group">
+                <label for="zoomImageSelect">Select an image:</label>
+                <select id="zoomImageSelect">
+                    <option value="">-- Select an image --</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="zoomFactor">Zoom factor:</label>
+                <select id="zoomFactor">
+                    <option value="10">10x</option>
+                    <option value="20">20x</option>
+                </select>
+            </div>
+            <button class="btn" id="zoomBtn" disabled>Apply Zoom</button>
+            <div id="zoomStatus" class="status"></div>
+            <div class="result-container hidden" id="zoomResult">
+                <h3>Zoomed Image:</h3>
+                <img id="zoomedImage" class="result-image">
+            </div>
+        </div>
+
+        <!-- Auto-Focus Section -->
+        <div class="card">
+            <h2>5. Auto-Focus</h2>
+            <p>Enhance image sharpness using contrast-based techniques.</p>
+            <div class="form-group">
+                <label for="focusImageSelect">Select an image:</label>
+                <select id="focusImageSelect">
+                    <option value="">-- Select an image --</option>
+                </select>
+            </div>
+            <button class="btn" id="focusBtn" disabled>Apply Auto-Focus</button>
+            <div id="focusStatus" class="status"></div>
+            <div class="result-container hidden" id="focusResult">
+                <h3>Auto-Focused Image:</h3>
+                <img id="focusedImage" class="result-image">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let uploadedFiles = [];
+        let selectedRoi = { x: 0, y: 0, width: 100, height: 100 };
+        let isDrawing = false;
+        let startX, startY;
+        let currentImage = null;
+
+        // DOM elements
+        const uploadBtn = document.getElementById('uploadBtn');
+        const stitchBtn = document.getElementById('stitchBtn');
+        const roiImageSelect = document.getElementById('roiImageSelect');
+        const zoomImageSelect = document.getElementById('zoomImageSelect');
+        const focusImageSelect = document.getElementById('focusImageSelect');
+        const zoomBtn = document.getElementById('zoomBtn');
+        const focusBtn = document.getElementById('focusBtn');
+        const canvas = document.getElementById('imageCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', initApp);
+        uploadBtn.addEventListener('click', uploadImages);
+        stitchBtn.addEventListener('click', stitchImages);
+        roiImageSelect.addEventListener('change', loadImageToCanvas);
+        zoomImageSelect.addEventListener('change', updateZoomButton);
+        focusImageSelect.addEventListener('change', updateFocusButton);
+        document.getElementById('extractRoiBtn').addEventListener('click', extractRoi);
+        zoomBtn.addEventListener('click', applyZoom);
+        focusBtn.addEventListener('click', applyAutoFocus);
+
+        // Canvas event listeners for ROI selection
+        canvas.addEventListener('mousedown', startROISelection);
+        canvas.addEventListener('mousemove', updateROISelection);
+        canvas.addEventListener('mouseup', endROISelection);
+
+        function initApp() {
+            // Initialize the application
+            console.log('Microscope Image Processing App initialized');
+        }
+
+        function uploadImages() {
+            const fileInput = document.getElementById('imageUpload');
+            const files = fileInput.files;
+            
+            if (files.length === 0) {
+                showStatus('uploadStatus', 'Please select at least one image file.', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+
+            showStatus('uploadStatus', 'Uploading images...', 'success');
+
+            fetch('/upload_images', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showStatus('uploadStatus', data.error, 'error');
+                } else {
+                    showStatus('uploadStatus', `${data.filenames.length} images uploaded successfully!`, 'success');
+                    uploadedFiles = data.filenames;
+                    updateImagePreviews(data.filenames);
+                    updateImageSelectDropdowns(data.filenames);
+                    stitchBtn.disabled = data.filenames.length < 2;
+                }
+            })
+            .catch(error => {
+                showStatus('uploadStatus', 'Error uploading images: ' + error, 'error');
+            });
+        }
+
+        function updateImagePreviews(filenames) {
+            const previewContainer = document.getElementById('uploadedImages');
+            previewContainer.innerHTML = '';
+
+            filenames.forEach(filename => {
+                const imageItem = document.createElement('div');
+                imageItem.className = 'image-item';
+                
+                const img = document.createElement('img');
+                img.src = `/uploads/${filename}`;
+                img.alt = filename;
+                
+                const label = document.createElement('div');
+                label.textContent = filename.substring(filename.indexOf('_') + 1).substring(0, 15) + '...';
+                
+                imageItem.appendChild(img);
+                imageItem.appendChild(label);
+                previewContainer.appendChild(imageItem);
+            });
+        }
+
+        function updateImageSelectDropdowns(filenames) {
+            // Update all select dropdowns with the uploaded images
+            [roiImageSelect, zoomImageSelect, focusImageSelect].forEach(select => {
+                // Keep the first option (placeholder)
+                select.innerHTML = '<option value="">-- Select an image --</option>';
+                
+                filenames.forEach(filename => {
+                    const option = document.createElement('option');
+                    option.value = filename;
+                    option.textContent = filename.substring(filename.indexOf('_') + 1);
+                    select.appendChild(option);
+                });
+            });
+        }
+
+        function stitchImages() {
+            if (uploadedFiles.length < 2) {
+                showStatus('stitchStatus', 'At least 2 images are required for stitching.', 'error');
+                return;
+            }
+
+            showStatus('stitchStatus', 'Stitching images... This may take a moment.', 'success');
+
+            // Build the URL with query parameters for all files
+            const url = '/stitch_images?' + uploadedFiles.map(file => `filenames=${encodeURIComponent(file)}`).join('&');
+
+            fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showStatus('stitchStatus', data.error, 'error');
+                    document.getElementById('stitchResult').classList.add('hidden');
+                } else {
+                    showStatus('stitchStatus', 'Images stitched successfully!', 'success');
+                    document.getElementById('stitchedImage').src = data.url;
+                    document.getElementById('stitchResult').classList.remove('hidden');
+                    
+                    // Add the stitched image to the select dropdowns
+                    addProcessedImageToDropdowns(data.filename);
+                }
+            })
+            .catch(error => {
+                showStatus('stitchStatus', 'Error stitching images: ' + error, 'error');
+                document.getElementById('stitchResult').classList.add('hidden');
+            });
+        }
+
+        function loadImageToCanvas() {
+            const selectedImage = roiImageSelect.value;
+            if (!selectedImage) {
+                document.getElementById('canvasContainer').classList.add('hidden');
+                return;
+            }
+
+            // Load the selected image to the canvas
+            const img = new Image();
+            img.onload = function() {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                document.getElementById('canvasContainer').classList.remove('hidden');
+                currentImage = img;
+                
+                // Initialize default ROI
+                selectedRoi = {
+                    x: Math.floor(img.width / 4),
+                    y: Math.floor(img.height / 4),
+                    width: Math.floor(img.width / 2),
+                    height: Math.floor(img.height / 2)
+                };
+                
+                drawROI();
+                updateROICoordinates();
+            };
+            
+            // Check if it's from uploads or processed folder
+            if (selectedImage.startsWith('stitched_') || 
+                selectedImage.startsWith('roi_') || 
+                selectedImage.startsWith('zoomed_') || 
+                selectedImage.startsWith('focused_')) {
+                img.src = `/processed/${selectedImage}`;
+            } else {
+                img.src = `/uploads/${selectedImage}`;
+            }
+        }
+
+        function startROISelection(e) {
+            const rect = canvas.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+            isDrawing = true;
+            
+            // Reset the ROI
+            selectedRoi.x = startX;
+            selectedRoi.y = startY;
+            selectedRoi.width = 0;
+            selectedRoi.height = 0;
+            
+            // Redraw the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(currentImage, 0, 0);
+        }
+
+        function updateROISelection(e) {
+            if (!isDrawing) return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+            
+            selectedRoi.width = currentX - startX;
+            selectedRoi.height = currentY - startY;
+            
+            // Redraw the canvas and ROI
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(currentImage, 0, 0);
+            drawROI();
+            updateROICoordinates();
+        }
+
+        function endROISelection() {
+            isDrawing = false;
+            
+            // Ensure positive width and height by adjusting coordinates if needed
+            if (selectedRoi.width < 0) {
+                selectedRoi.x += selectedRoi.width;
+                selectedRoi.width = Math.abs(selectedRoi.width);
+            }
+            
+            if (selectedRoi.height < 0) {
+                selectedRoi.y += selectedRoi.height;
+                selectedRoi.height = Math.abs(selectedRoi.height);
+            }
+            
+            drawROI();
+            updateROICoordinates();
+        }
+
+        function drawROI() {
+            // Draw the selected ROI rectangle
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(selectedRoi.x, selectedRoi.y, selectedRoi.width, selectedRoi.height);
+        }
+
+        function updateROICoordinates() {
+            // Update the displayed ROI coordinates
+            document.getElementById('roiX').textContent = Math.round(selectedRoi.x);
+            document.getElementById('roiY').textContent = Math.round(selectedRoi.y);
+            document.getElementById('roiWidth').textContent = Math.round(selectedRoi.width);
+            document.getElementById('roiHeight').textContent = Math.round(selectedRoi.height);
+        }
+
+        function extractRoi() {
+            const selectedImage = roiImageSelect.value;
+            if (!selectedImage) {
+                showStatus('roiStatus', 'Please select an image first.', 'error');
+                return;
+            }
+
+            // Ensure positive width and height
+            if (selectedRoi.width <= 0 || selectedRoi.height <= 0) {
+                showStatus('roiStatus', 'Please select a valid ROI with positive width and height.', 'error');
+                return;
+            }
+
+            showStatus('roiStatus', 'Extracting ROI...', 'success');
+
+            // Prepare the form data with ROI coordinates and stitched filename
+            const formData = new FormData();
+            formData.append('stitched_filename', selectedImage);
+            formData.append('x', Math.round(selectedRoi.x));
+            formData.append('y', Math.round(selectedRoi.y));
+            formData.append('width', Math.round(selectedRoi.width));
+            formData.append('height', Math.round(selectedRoi.height));
+
+            // Send the request to the backend
+            fetch('/roi_selection', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showStatus('roiStatus', data.error, 'error');
+                    document.getElementById('roiResult').classList.add('hidden');
+                } else {
+                    showStatus('roiStatus', 'ROI extracted successfully!', 'success');
+                    document.getElementById('roiImage').src = data.url;
+                    document.getElementById('roiResult').classList.remove('hidden');
+                    
+                    // Add the ROI image to the select dropdowns
+                    addProcessedImageToDropdowns(data.filename);
+                }
+            })
+            .catch(error => {
+                showStatus('roiStatus', 'Error extracting ROI: ' + error, 'error');
+                document.getElementById('roiResult').classList.add('hidden');
+            });
+        }
+
+        function updateZoomButton() {
+            zoomBtn.disabled = !zoomImageSelect.value;
+        }
+
+        function updateFocusButton() {
+            focusBtn.disabled = !focusImageSelect.value;
+        }
+
+        function applyZoom() {
+            const selectedImage = zoomImageSelect.value;
+            const zoomFactor = document.getElementById('zoomFactor').value;
+            
+            if (!selectedImage) {
+                showStatus('zoomStatus', 'Please select an image first.', 'error');
+                return;
+            }
+
+            showStatus('zoomStatus', 'Applying zoom...', 'success');
+
+            const formData = new FormData();
+            
+            // We need to fetch the image file from the server first
+            let imagePath;
+            if (selectedImage.startsWith('stitched_') || 
+                selectedImage.startsWith('roi_') || 
+                selectedImage.startsWith('zoomed_') || 
+                selectedImage.startsWith('focused_')) {
+                imagePath = `/processed/${selectedImage}`;
+            } else {
+                imagePath = `/uploads/${selectedImage}`;
+            }
+            
+            fetch(imagePath)
+                .then(response => response.blob())
+                .then(blob => {
+                    // Create a file from the blob
+                    const file = new File([blob], selectedImage, { type: blob.type });
+                    formData.append('image', file);
+                    formData.append('zoom_factor', zoomFactor);
+
+                    return fetch('/zoom', {
+                        method: 'POST',
+                        body: formData
+                    });
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        showStatus('zoomStatus', data.error, 'error');
+                        document.getElementById('zoomResult').classList.add('hidden');
+                    } else {
+                        showStatus('zoomStatus', 'Zoom applied successfully!', 'success');
+                        document.getElementById('zoomedImage').src = data.url;
+                        document.getElementById('zoomResult').classList.remove('hidden');
+                        
+                        // Add the zoomed image to the select dropdowns
+                        addProcessedImageToDropdowns(data.filename);
+                    }
+                })
+                .catch(error => {
+                    showStatus('zoomStatus', 'Error applying zoom: ' + error, 'error');
+                    document.getElementById('zoomResult').classList.add('hidden');
+                });
+        }
+
+        function applyAutoFocus() {
+            const selectedImage = focusImageSelect.value;
+            
+            if (!selectedImage) {
+                showStatus('focusStatus', 'Please select an image first.', 'error');
+                return;
+            }
+
+            showStatus('focusStatus', 'Applying auto-focus...', 'success');
+
+            // Get the correct path for the image
+            let imageQuery;
+            if (selectedImage.startsWith('stitched_') || 
+                selectedImage.startsWith('roi_') || 
+                selectedImage.startsWith('zoomed_') || 
+                selectedImage.startsWith('focused_')) {
+                imageQuery = selectedImage;
+            } else {
+                imageQuery = selectedImage;
+            }
+
+            fetch(`/auto_focus?image=${encodeURIComponent(imageQuery)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        showStatus('focusStatus', data.error, 'error');
+                        document.getElementById('focusResult').classList.add('hidden');
+                    } else {
+                        showStatus('focusStatus', 'Auto-focus applied successfully!', 'success');
+                        document.getElementById('focusedImage').src = data.url;
+                        document.getElementById('focusResult').classList.remove('hidden');
+                        
+                        // Add the focused image to the select dropdowns
+                        addProcessedImageToDropdowns(data.filename);
+                    }
+                })
+                .catch(error => {
+                    showStatus('focusStatus', 'Error applying auto-focus: ' + error, 'error');
+                    document.getElementById('focusResult').classList.add('hidden');
+                });
+        }
+
+        function addProcessedImageToDropdowns(filename) {
+            // Add the processed image to all select dropdowns
+            [roiImageSelect, zoomImageSelect, focusImageSelect].forEach(select => {
+                const exists = Array.from(select.options).some(option => option.value === filename);
+                
+                if (!exists) {
+                    const option = document.createElement('option');
+                    option.value = filename;
+                    option.textContent = filename;
+                    select.appendChild(option);
+                }
+            });
+        }
+
+        function showStatus(elementId, message, type) {
+            const statusElement = document.getElementById(elementId);
+            statusElement.textContent = message;
+            statusElement.className = type;
+        }
+    </script>
+</body>
+</html>
